@@ -1,0 +1,112 @@
+---
+title: "Portfolio5"
+author: "Liv Tollånes"
+date: "12/3/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Building on the shoulders of giants: meta-analysis
+
+## Questions to be answered
+
+1. What is the current evidence for distinctive vocal patterns in schizophrenia? Report how many papers report quantitative estimates, comment on what percentage of the overall studies reviewed they represent (see PRISMA chart) your method to analyze them, the estimated effect size of the difference (mean effect size and standard error) and forest plots representing it. N.B. Only measures of pitch mean and pitch sd are required for the assignment (all the other measures have been removed from the dataset for the sake of simplicity). 
+
+2. Do the results match your own analysis from Assignment 3? If you add your results to the meta-analysis, do the estimated effect sizes change? Report the new estimates and the new forest plots.
+
+3. Assess the quality of the literature: report and comment on heterogeneity of the studies (tau, I2), on publication bias (funnel plot), and on influential studies.
+
+## Tips on the process to follow:
+
+- Download the data on all published articles analyzing voice in schizophrenia and the prisma chart as reference of all articles found and reviewed
+Data: https://www.dropbox.com/s/0l9ur0gaabr80a8/Matrix_MetaAnalysis_Diagnosis_updated290719.xlsx?dl=0
+Prisma chart: https://www.dropbox.com/s/vbjf6ff73dv9tru/PRISMA%202009%20flow%20diagram_PP.pptx?dl=0 
+
+```{r}
+# Loading packages
+pacman::p_load(metafor, tidyverse, pastecs, dplyr, ggplot2, readxl, escalc)
+
+#Loading the data
+df <- read_excel("Matrix_MetaAnalysis_Diagnosis_updated290719.xlsx")
+df <- as.data.frame(df)
+```
+
+
+- Look through the dataset to find out which columns to use, and if there is any additional information written as comments (real world data is always messy!).
+    * Hint: PITCH_F0M and PITCH_F0SD group of variables are what you need
+    
+  
+```{r}
+# creating a subset of the data with only interesting columns
+dfsub <- df %>% select(StudyID, Title, Authors, Year_publication, Article, DIAGNOSIS, MALE_SZ, MALE_HC, FEMALE_SZ, FEMALE_HC, AGE_M_SZ, AGE_SD_SZ, AGE_M_HC, AGE_SD_HC, SAMPLE_SIZE_SZ, SAMPLE_SIZE_HC, PITCH_F0_HC_M, PITCH_F0_HC_SD, PITCH_F0_SZ_M, PITCH_F0_SZ_SD, TYPE_OF_TASK)
+
+df_rel <- dfsub %>% subset(dfsub$PITCH_F0_SZ_M != 0)
+
+
+
+```
+  
+  
+- Following the procedure in the slides calculate effect size and standard error of the effect size per each study. N.B. we focus on pitch mean and pitch standard deviation.
+ . first try using lmer (to connect to what you know of mixed effects models)
+ . then use rma() (to get some juicy additional statistics)
+ 
+```{r}
+WM_D <- escalc(measure = "SMD", n1i = SAMPLE_SIZE_HC, n2i = SAMPLE_SIZE_SZ, m1i = PITCH_F0_HC_M, m2i = PITCH_F0_SZ_M, sd1i = PITCH_F0_HC_SD, sd2i = PITCH_F0_SZ_SD, data = df_rel)
+# WM_D <- rename(WM_D, Observed_effect_size = yi)
+# WM_D <- rename(WM_D, variance_of_effect_size = vi)
+
+# Tau squared is a measure of overall variance 
+# I^2 is the proportion of variance due to heterogeneity. It cannot be reduced to within-study uncertainty
+# Is it desireable to have  high variance? (higher value of I^2)
+#Removing the studies with NA's in the 
+important columns
+WM2<-subset(WM_D, StudyID!="3" & StudyID!="4")
+WM2<-subset(WM2, StudyID!="40" & StudyID!="41")
+
+# Creating mixed effects model for meta analysis
+#Only random effects
+m2 <- rma(yi, vi, data = WM2, slab = StudyID)
+summary(m2)
+funnel(m2)
+regtest(m2)
+ranktest(m2)
+forest(m2)
+
+#Both fixed and random effects
+m4 <- rma(yi, vi, mods = cbind(as.factor(TYPE_OF_TASK)), data = WM2, slab = StudyID)
+summary(m4)
+funnel(m4)
+regtest(m4)
+ranktest(m4)
+forest(m4)
+
+# testing for influential studies
+inf <-  influence(m4)
+print(inf)
+plot(inf)
+
+```
+ 
+
+- Build a forest plot of the results (forest(model))
+
+```{r}
+
+```
+
+ 
+- Go back to Assignment 3, add your own study to the data table, and re-run meta-analysis. Do the results change?
+```{r}
+
+```
+
+
+- Now look at the output of rma() and check tau and I2
+```{r}
+
+```
+
