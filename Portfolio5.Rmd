@@ -27,11 +27,12 @@ Prisma chart: https://www.dropbox.com/s/vbjf6ff73dv9tru/PRISMA%202009%20flow%20d
 
 ```{r}
 # Loading packages
-pacman::p_load(metafor, tidyverse, pastecs, dplyr, ggplot2, readxl, escalc)
+pacman::p_load(metafor, tidyverse, pastecs, dplyr, ggplot2, readxl, lmerTest)
 
 #Loading the data
 df <- read_excel("Matrix_MetaAnalysis_Diagnosis_updated290719.xlsx")
 df <- as.data.frame(df)
+df3 <- read.csv("groupedData.csv")
 ```
 
 
@@ -54,6 +55,8 @@ df_rel <- dfsub %>% subset(dfsub$PITCH_F0_SZ_M != 0)
  . first try using lmer (to connect to what you know of mixed effects models)
  . then use rma() (to get some juicy additional statistics)
  
+ - Build a forest plot of the results (forest(model))
+ 
 ```{r}
 WM_D <- escalc(measure = "SMD", n1i = SAMPLE_SIZE_HC, n2i = SAMPLE_SIZE_SZ, m1i = PITCH_F0_HC_M, m2i = PITCH_F0_SZ_M, sd1i = PITCH_F0_HC_SD, sd2i = PITCH_F0_SZ_SD, data = df_rel)
 # WM_D <- rename(WM_D, Observed_effect_size = yi)
@@ -62,10 +65,19 @@ WM_D <- escalc(measure = "SMD", n1i = SAMPLE_SIZE_HC, n2i = SAMPLE_SIZE_SZ, m1i 
 # Tau squared is a measure of overall variance 
 # I^2 is the proportion of variance due to heterogeneity. It cannot be reduced to within-study uncertainty
 # Is it desireable to have  high variance? (higher value of I^2)
-#Removing the studies with NA's in the 
-important columns
+
+#Removing the studies with NA's in the important columns
 WM2<-subset(WM_D, StudyID!="3" & StudyID!="4")
 WM2<-subset(WM2, StudyID!="40" & StudyID!="41")
+
+
+# Using lmer to to the meta analysis
+#first lmer
+as.factor(WM2$StudyID)
+lm_1 <- lmerTest::lmer(yi ~ 0 + TYPE_OF_TASK + (1|StudyID), data = WM2)
+
+#We get an error message when trying to fit a linear mixed model to the data. This is because we only have one observation (effect size, yi) per grouping variable (StudyID).
+
 
 # Creating mixed effects model for meta analysis
 #Only random effects
@@ -92,21 +104,61 @@ plot(inf)
 ```
  
 
-- Build a forest plot of the results (forest(model))
-
-```{r}
-
-```
-
- 
 - Go back to Assignment 3, add your own study to the data table, and re-run meta-analysis. Do the results change?
-```{r}
-
-```
-
-
 - Now look at the output of rma() and check tau and I2
 ```{r}
+df3 <- read.csv("groupedData.csv")
+
+fdf3 <- aggregate.data.frame(df3, by = list(df3$study, df3$diagnosis), FUN = "mean")
+
+StudyID <- c("88", "87")
+Title <- c("Assignment 3 - Study 1", "Assignment 3 - Study 2")
+Authors <- c("Unknown", "Unknown")
+Year_publication <- c(2020, 2020)
+Article <- c("Assignment 3(2020)", "Assignment 3(2020")
+DIAGNOSIS <- c("SZ", "SZ")
+SAMPLE_SIZE_SZ <- c(34, 23)
+SAMPLE_SIZE_HC <- c(36, 23)
+
+assignment3 <- data_frame(StudyID, Title, Authors, Year_publication, Article, DIAGNOSIS, SAMPLE_SIZE_SZ, SAMPLE_SIZE_HC)
+
+fdf3$diagnosis <- as.factor(fdf3$diagnosis)
+study1 <- fdf3 %>% subset(fdf3$study == 1)
+study2 <- fdf3 %>% subset(fdf3$study == 2)
+
+study1control <- study1 %>% subset(study1$diagnosis == 0) 
+study1sz <- study1 %>% subset(study1$diagnosis == 1)
+study2control <- study2 %>% subset(study2$diagnosis == 0)
+study2sz <- study2 %>% subset(study2$diagnosis == 1)
+SAMPLE_SIZE_HC <- (study1control)
+
+PITCH_F0_HC_M <- c(mean(study1control$mean), mean(study2control$mean))
+PITCH_F0_SZ_M <- c(mean(study1sz$mean), mean(study2sz$sd))
+PITCH_F0_HC_SD <- c(mean(study1control$sd), mean(study2control$sd))
+PITCH_F0_SZ_SD <- c(mean(study1sz$sd), mean(study2sz$sd))
+
+Study1df <- cbind(PITCH_F0_HC_M, PITCH_F0_SZ_M, PITCH_F0_HC_SD, PITCH_F0_SZ_SD)
+
+merged_ass3 <- cbind(assignment3, Study1df)
+
+#new dataframe with only relevant columns
+WM3 <- WM2 %>% select(StudyID, Title, Authors, Year_publication, Article, DIAGNOSIS, SAMPLE_SIZE_SZ, SAMPLE_SIZE_HC, PITCH_F0_HC_M, PITCH_F0_HC_SD, PITCH_F0_SZ_M, PITCH_F0_SZ_SD)
+
+finalmeta <- rbind.data.frame(merged_ass3, WM3)
+
+
+# Completing the same analyses on the new data frame with our previous studies
+
+finalmeta <- escalc(measure = "SMD", n1i = SAMPLE_SIZE_HC, n2i = SAMPLE_SIZE_SZ, m1i = PITCH_F0_HC_M, m2i = PITCH_F0_SZ_M, sd1i = PITCH_F0_HC_SD, sd2i = PITCH_F0_SZ_SD, data = finalmeta)
+
+# Creating mixed effects model for meta analysis
+#Only random effects
+mm2 <- rma(yi, vi, data = finalmeta, slab = StudyID)
+summary(mm2)
+funnel(mm2)
+regtest(mm2)
+ranktest(mm2)
+forest(mm2)
 
 ```
 
