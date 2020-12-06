@@ -27,7 +27,7 @@ Prisma chart: https://www.dropbox.com/s/vbjf6ff73dv9tru/PRISMA%202009%20flow%20d
 
 ```{r}
 # Loading packages
-pacman::p_load(metafor, tidyverse, pastecs, dplyr, ggplot2, readxl, lmerTest)
+pacman::p_load(metafor, tidyverse, pastecs, dplyr, ggplot2, readxl, lmerTest, effsize)
 
 #Loading the data
 df <- read_excel("Matrix_MetaAnalysis_Diagnosis_updated290719.xlsx")
@@ -46,8 +46,6 @@ dfsub <- df %>% select(StudyID, Title, Authors, Year_publication, Article, DIAGN
 
 df_rel <- dfsub %>% subset(dfsub$PITCH_F0_SZ_M != 0)
 
-
-
 ```
   
   
@@ -62,21 +60,19 @@ WM_D <- escalc(measure = "SMD", n1i = SAMPLE_SIZE_HC, n2i = SAMPLE_SIZE_SZ, m1i 
 # WM_D <- rename(WM_D, Observed_effect_size = yi)
 # WM_D <- rename(WM_D, variance_of_effect_size = vi)
 
-# Tau squared is a measure of overall variance 
-# I^2 is the proportion of variance due to heterogeneity. It cannot be reduced to within-study uncertainty
-# Is it desireable to have  high variance? (higher value of I^2)
 
 #Removing the studies with NA's in the important columns
 WM2<-subset(WM_D, StudyID!="3" & StudyID!="4")
 WM2<-subset(WM2, StudyID!="40" & StudyID!="41")
 
 
-# Using lmer to to the meta analysis
+# Using lmer to do the meta analysis
 #first lmer
-as.factor(WM2$StudyID)
-lm_1 <- lmerTest::lmer(yi ~ 0 + TYPE_OF_TASK + (1|StudyID), data = WM2)
+m <- lmer(yi ~ 1 + (1 | StudyID), weights = 1/vi, data=WM2, control=lmerControl(check.nobs.vs.nlev="ignore", check.nobs.vs.nRE="ignore"))
+summary(m)
 
-#We get an error message when trying to fit a linear mixed model to the data. This is because we only have one observation (effect size, yi) per grouping variable (StudyID).
+m3 <- lmer(yi ~ 1 + TYPE_OF_TASK + (1 | StudyID), weights = 1/vi, data= WM2, control=lmerControl(check.nobs.vs.nlev="ignore", check.nobs.vs.nRE="ignore"))
+summary(m3)
 
 
 # Creating mixed effects model for meta analysis
@@ -86,7 +82,7 @@ summary(m2)
 funnel(m2)
 regtest(m2)
 ranktest(m2)
-forest(m2)
+forest(m2, header = T)
 
 #Both fixed and random effects
 m4 <- rma(yi, vi, mods = cbind(as.factor(TYPE_OF_TASK)), data = WM2, slab = StudyID)
@@ -94,12 +90,9 @@ summary(m4)
 funnel(m4)
 regtest(m4)
 ranktest(m4)
-forest(m4)
+forest.rma(m4, header = T)
 
-# testing for influential studies
-inf <-  influence(m4)
-print(inf)
-plot(inf)
+
 
 ```
  
@@ -159,6 +152,25 @@ funnel(mm2)
 regtest(mm2)
 ranktest(mm2)
 forest(mm2)
+
+# testing for influential studies
+inf <-  influence(mm2)
+print(inf)
+plot(inf)
+
+#The testing for influential studies illustrates that study number 87 is an influential study
+
+#Creating a subset without the outlier (study 87/ originally study number 2)
+subfinal <- subset(finalmeta, finalmeta$yi < 4)
+
+#Escalc without outlier
+subfinal1 <- escalc(measure = "SMD", n1i = SAMPLE_SIZE_HC, n2i = SAMPLE_SIZE_SZ, m1i = PITCH_F0_HC_M, m2i = PITCH_F0_SZ_M, sd1i = PITCH_F0_HC_SD, sd2i = PITCH_F0_SZ_SD, data = subfinal)
+
+#Model without outlier
+mm10 <- rma(yi, vi, data = subfinal, slab = StudyID)
+
+#Funnel without outlier
+funnel(mm10)
 
 ```
 
